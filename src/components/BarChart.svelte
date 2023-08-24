@@ -3,6 +3,8 @@
 	export let xKey = "value";
 	export let yKey = "category";
 	export let zKey = "group";
+	export let colorKey = "color";
+	export let colors = ["white", "#888", "#444"];
 	export let formatTick = d => d.toLocaleString();
 	export let suffix = "";
 	export let barHeight = 20;
@@ -60,7 +62,7 @@
 	<div class="bar-group" style:height="{barHeight}px">
 	{#each group.values as d, i}
 		{#if i == 0}
-		<div class="bar" style:left="0" style:width="{xScale(d[xKey])}%"/>
+		<div class="bar" style:left="0" style:width="{xScale(d[xKey])}%" style:background-color="{typeof d[colorKey] === "number" ? colors[d[colorKey]] : null}"/>
 		{:else}
 		<div class="marker" style:left="calc({xScale(d[xKey])}% - {markerWidth / 2}px)" style:border-left-width="{markerWidth}px"/>
 		{/if}

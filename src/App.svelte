@@ -20,6 +20,7 @@
   let points = {};
   let pos = "from";
 	let highlight = "from";
+	let filter = true;
 
   async function init() {
     const metadata_raw = await fetch("./data/area_metadata.csv");
@@ -118,15 +119,18 @@
 				zoom = map.getZoom();
 				scene.render({uMatrix, pointSize: zoom / 3});
 			}
-		})
+		}, "place_suburb");
   }
+
+	function getHighlighted(data, code, highlight) {
+		return [1, 2, 3, 4, 5].map(i => data[code][`${highlight === "to" ? "from" : "to"}${i}cd`]);
+	}
 
 	function doSelect(e) {
 		const code = e?.detail?.id;
 		if (code) {
 			selected = code;
-			opacityVals({data: points.array.map(d => d[highlight] === code ? 0.9 : 0.1)});
-			highlighted = [data[code].to1cd, data[code].to2cd, data[code].to3cd, data[code].to4cd, data[code].to5cd];
+			updateHighlight();
 			const feature = e.detail.feature.toJSON();
 			const bounds = bbox(feature);
 			map.fitBounds(bounds, {padding: 200});
@@ -146,22 +150,26 @@
 		}
   }
 
-	function updateHighlight(newval) {
-		if (selected && highlight !== newval) {
-			opacityVals({data: points.array.map(d => d[newval] === selected ? 1 : 0.1)});
+	function updateHighlight(newval = highlight) {
+		if (selected) {
+			opacityVals({data: filter ?
+				points.array.map(d => d[newval] === selected ? 1 : 0.1) :
+				Array.from({length: points.array.length}, () => 0.7)});
+			highlighted = getHighlighted(data, selected, newval);
 			highlight = newval;
 		}
 	}
+	$: console.log(highlight);
 </script>
 
 <main class="container">
 	<div class="info">
 		{#each hovered ? [hovered] : selected ? [selected] : [] as code}
-		<div class="big-text">
-			{metadata[code].areanm}
-			{#if code === selected}<span class="small-text"><button on:click={unSelect}>X</button></span>{/if}
-		</div>
 		<div class="grid">
+			<div class="big-text" style:grid-column="span 2">
+				{metadata[code].areanm}
+				{#if code === selected}<button on:click={unSelect} class="btn-link">Deselect</button>{/if}
+			</div>
 			<button on:click={() => updateHighlight("from")} class:btn-active={highlight === "from"}>
 				Resident population
 				<div class="big-text">{data[code].resident.toLocaleString()}</div>
@@ -176,30 +184,51 @@
 			<div style:grid-column="span 2">
 				{#if highlight === "from"}
 				<BarChart data={[
-					{category: "Works from home", value: data[code].home},
-					{category: `Works within ${metadata[code].areanm}`, value: data[code].within},
-					{category: metadata[data[code].to1cd].areanm, value: data[code].to1},
-					{category: metadata[data[code].to2cd].areanm, value: data[code].to2},
-					{category: metadata[data[code].to3cd].areanm, value: data[code].to3},
-					{category: metadata[data[code].to4cd].areanm, value: data[code].to4},
-					{category: metadata[data[code].to5cd].areanm, value: data[code].to5},
-					{category: "Works in another location", value: data[code].toother},
+					{category: "Works from home", value: data[code].home, color: 0},
+					{category: `Works within ${metadata[code].areanm}`, value: data[code].within, color: 0},
+					...[1, 2, 3, 4, 5].map(i => ({
+						category: metadata[data[code][`to${i}cd`]].areanm,
+						value: data[code][`to${i}`],
+						color: 1
+					})),
+					{category: "Works in another location", value: data[code].toother, color: 2},
 				]}/>
 				{:else}
 				<BarChart data={[
-					{category: "Works from home", value: data[code].home},
-					{category: `Lives within ${metadata[code].areanm}`, value: data[code].within},
-					{category: metadata[data[code].from1cd].areanm, value: data[code].from1},
-					{category: metadata[data[code].from2cd].areanm, value: data[code].from2},
-					{category: metadata[data[code].from3cd].areanm, value: data[code].from3},
-					{category: metadata[data[code].from4cd].areanm, value: data[code].from4},
-					{category: metadata[data[code].from5cd].areanm, value: data[code].from5},
-					{category: "Lives in another location", value: data[code].fromother},
+					{category: "Works from home", value: data[code].home, color: 0},
+					{category: `Lives within ${metadata[code].areanm}`, value: data[code].within, color: 0},
+					...[1, 2, 3, 4, 5].map(i => ({
+						category: metadata[data[code][`from${i}cd`]].areanm,
+						value: data[code][`from${i}`],
+						color: 1
+					})),
+					{category: "Lives in another location", value: data[code].fromother, color: 2},
 				]}/>
 				{/if}
 			</div>
+			<div style:grid-column="span 2">
+				<label>
+					<input type="checkbox" bind:checked={filter} on:change={() => updateHighlight()}/>
+					Filter points for this area on map
+				</label>
+			</div>
 		</div>
 		{/each}
+		{#if !selected && !hovered}
+		<div class="grid">
+			<div class="big-text" style:grid-column="span 2">
+				2011 Census travel to work data
+			</div>
+			<div style:grid-column="span 2">
+				<p>Using this experimental tool, you can:</p>
+				<ul>
+					<li>animate commutes on a map, but clicking "place of work".</li>
+					<li>see commutes for individual area, by hovering or clicking an area on the map.</li>
+				</ul>
+				<p>Note: The data in this tool is from 2011, not the latest 2021 census.</p>
+			</div>
+		</div>
+		{/if}
 	</div>
 
 	<div class="map">
@@ -229,6 +258,7 @@
 					paint={{
 						"fill-color": "rgba(0,0,0,0)"
 					}}
+					order="water"
 					hover bind:hovered
 					select {selected} on:select={doSelect}
 					highlight {highlighted}/>
@@ -238,22 +268,34 @@
 					paint={{
 						"line-color": '#555',
 						"line-width": 0.5
-					}}/>
+					}}
+					order="place_other"/>
 				<MapLayer
-					id="msoa-highlight"
+					id="msoa-highlighted"
+					type="line"
+					paint={{
+						"line-color": ['case',
+							['==', ['feature-state', 'highlighted'], true], '#aaa',
+							'rgba(0,0,0,0)'
+						],
+						"line-width": 1
+					}}
+					order="place_other"/>
+				<MapLayer
+					id="msoa-selected"
 					type="line"
 					paint={{
 						"line-color": ['case',
 							['==', ['feature-state', 'selected'], true], 'white',
 							['==', ['feature-state', 'hovered'], true], 'white',
-							['==', ['feature-state', 'highlighted'], true], '#aaa',
 							'rgba(0,0,0,0)'
 						],
 						"line-width": ['case',
-							['==', ['feature-state', 'selected'], true], 2,
+							['==', ['feature-state', 'selected'], true], 2.5,
 							1
 						]
-					}}/>
+					}}
+					order="place_other"/>
 			</MapSource>
 		</Map>
 	</div>
@@ -279,15 +321,6 @@
 		background-color: rgba(0,0,0,0.5);
 		padding: 12px;
 	}
-	.map-legend > button {
-		color: white;
-		background-color: #333;
-		border-color: #aaa;
-	}
-	.map-legend > button.btn-active {
-		border-color: white;
-		outline: 1px solid white;
-	}
 	.map-legend > span {
 		display: block;
 		color: white;
@@ -309,8 +342,19 @@
 		text-align: left;
 	}
 	.btn-active {
-		border-color: black;
-		outline: 1px solid black;
+		border-color: white;
+		outline: 2px solid white;
+	}
+	.btn-link {
+		margin: 0;
+		padding: 0;
+		background: none;
+		border: none;
+		color: #27A0CC;
+		font-size: 12px;
+	}
+	.btn-link:hover {
+		text-decoration: underline;
 	}
 	.big-text {
 		font-size: 1.8em;
