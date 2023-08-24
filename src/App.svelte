@@ -209,7 +209,7 @@
 			<div style:grid-column="span 2">
 				<label>
 					<input type="checkbox" bind:checked={filter} on:change={() => updateHighlight()}/>
-					Filter points for this area on map
+					Highlight points for this area on map
 				</label>
 			</div>
 		</div>
@@ -222,7 +222,7 @@
 			<div style:grid-column="span 2">
 				<p>Using this experimental tool, you can:</p>
 				<ul>
-					<li>animate commutes on a map, but clicking "place of work".</li>
+					<li>animate commutes on a map, by clicking "place of work".</li>
 					<li>see commutes for individual area, by hovering or clicking an area on the map.</li>
 				</ul>
 				<p>Note: The data in this tool is from 2011, not the latest 2021 census.</p>
