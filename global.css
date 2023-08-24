@@ -5,7 +5,8 @@ html, body {
 }
 
 body {
-	color: #333;
+	background-color: #111;
+	color: white;
 	margin: 0;
 	padding: 0;
 	box-sizing: border-box;
@@ -45,9 +46,14 @@ input:disabled {
 }
 
 button {
-	color: #333;
-	background-color: #f4f4f4;
-	outline: none;
+	color: white;
+	background-color: #333;
+	border-color: #aaa;
+	cursor: pointer;
+}
+
+button:hover {
+	outline: 1px solid white;
 }
 
 button:disabled {
@@ -55,7 +61,7 @@ button:disabled {
 }
 
 button:not(:disabled):active {
-	background-color: #ddd;
+	background-color: #666;
 }
 
 button:focus {
