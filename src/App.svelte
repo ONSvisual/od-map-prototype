@@ -186,11 +186,11 @@
 		}
 	}
 
-	function unSelect() {
+	function unSelect(e) {
 		selected = null;
 		highlighted = [];
 		opacityVals({data: Array.from({length: points.array.length}, () => 0.7)});
-		map.fitBounds(bounds);
+		if (e) map.fitBounds(bounds);
 	}
 
   function updatePos(newval) {
