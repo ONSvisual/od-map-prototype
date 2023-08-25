@@ -3,40 +3,92 @@
   import reglLib from "regl";
   import reglTween from "regl-tween";
   import { csvParse, autoType } from "d3-dsv";
-	import bbox from "@turf/bbox";
+	import { feature } from "topojson-client";
 	import { Map, MapSource, MapLayer } from "@onsvisual/svelte-maps";
 	import BarChart from "./components/BarChart.svelte";
 
-	const bounds = [-7.5722, 49.9600, 1.6815, 58.6350];
+	const bounds = [-6.3603,49.8823,1.7637,55.8112];
+
+	const mapSources = [
+		{
+			key: "msoa",
+			type: "vector",
+			props: {
+				url: "https://cdn.ons.gov.uk/maptiles/administrative/msoa/v2/boundaries/{z}/{x}/{y}.pbf",
+				layer: "msoa",
+				maxzoom: 12,
+				minzoom: 6
+			}
+		},
+		{
+			key: "lad",
+			type: "geojson",
+			props: {}
+		}
+	];
 
 	const plot = (coord) => {
     const proj = maplibre.MercatorCoordinate.fromLngLat({ lng: coord[0], lat: coord[1] });
     return [proj.x, proj.y];
   };
 
+	const scaleLinear = (input, output) => (val) => {
+		return val < input[0] ? output[0] :
+			val > input[1] ? output[1] :
+			((val - input[0]) * ((output[1] - output[0]) / (input[1] - input[0]))) + output[0]; 
+	};
+	const scale = scaleLinear([5, 14], [1, 8]);
+
   let map, selected, hovered, highlighted, zoom;
   let regl, tween, scene, positionBuffer, opacityVals, uMatrix;
 	let metadata, data;
   let points = {};
+	let geo = "lad";
   let pos = "from";
 	let highlight = "from";
 	let filter = true;
 
+	function fitBounds(features) {
+		const bounds = [
+			Math.min(...features.map(f => f.xmin)),
+			Math.min(...features.map(f => f.ymin)),
+			Math.max(...features.map(f => f.xmax)),
+			Math.max(...features.map(f => f.ymax))
+		];
+		map.fitBounds(bounds, {padding: 50});
+	}
+
   async function init() {
-    const metadata_raw = await fetch("./data/area_metadata.csv");
-    const metadata_array = csvParse(await metadata_raw.text());
+		const lad_geojson = feature(await (await fetch("./data/lad11_bsc.json")).json(), "lad");
+    const metadata_lad_raw = await (await fetch("./data/lad11_metadata.csv")).text();
+    const metadata_msoa_raw = await (await fetch("./data/msoa11_metadata.csv")).text();
+    const metadata_array = [
+			...csvParse(await metadata_lad_raw),
+			...csvParse(await metadata_msoa_raw)
+		];
     const metadata_indexed = {};
     metadata_array.forEach(d => metadata_indexed[d.areacd] = d);
 		metadata = metadata_indexed;
+		mapSources[1].props.data = lad_geojson;
 		
-    const data_raw = await fetch("./data/msoa_data.csv");
-    const data_array = csvParse(await data_raw.text(), autoType);
+		const data_lad_raw = await fetch("./data/lad11_data.csv");
+		const data_msoa_raw = await fetch("./data/msoa11_data.csv");
+    const data_array = [
+			...csvParse(await data_lad_raw.text(), autoType),
+			...csvParse(await data_msoa_raw.text(), autoType),
+		];
     const data_indexed = {};
     data_array.forEach(d => data_indexed[d.areacd] = d);
 		data = data_indexed;
 
-    const points_raw = await fetch("./data/msoa_points.csv");
-    points.array = csvParse(await points_raw.text(), autoType);
+    const points_raw = await fetch("./data/msoa11_points.csv");
+    points.array = csvParse(await points_raw.text(), (d) => {
+			return {
+				from_msoa: d.from, from_lad: metadata[d.from]?.parentcd || d.from,
+				to_msoa: d.to, to_lad: metadata[d.to]?.parentcd || d.to,
+				x1: +d.x1, y1: +d.y1, x2: +d.x2, y2: +d.y2
+			};
+		});
     const count = points.array.length;
     
     points.from = points.array.map(d => plot([d.x1, d.y1]));
@@ -117,7 +169,7 @@
 			render: function(gl, matrix) {
 				uMatrix = matrix;
 				zoom = map.getZoom();
-				scene.render({uMatrix, pointSize: zoom / 3});
+				scene.render({uMatrix, pointSize: scale(zoom)});
 			}
 		}, "place_suburb");
   }
@@ -127,13 +179,10 @@
 	}
 
 	function doSelect(e) {
-		const code = e?.detail?.id;
+		const code = typeof e === "string" ? e : e?.detail?.id;
 		if (code) {
 			selected = code;
 			updateHighlight();
-			const feature = e.detail.feature.toJSON();
-			const bounds = bbox(feature);
-			map.fitBounds(bounds, {padding: 200});
 		}
 	}
 
@@ -141,6 +190,7 @@
 		selected = null;
 		highlighted = [];
 		opacityVals({data: Array.from({length: points.array.length}, () => 0.7)});
+		map.fitBounds(bounds);
 	}
 
   function updatePos(newval) {
@@ -150,22 +200,35 @@
 		}
   }
 
+	function updateGeo(newval) {
+    if (geo !== newval) {
+    	geo = newval;
+			if (selected && newval === "lad") {
+				doSelect(metadata[selected].parentcd);
+			} else {
+				unSelect();
+			}
+		}
+  }
+
 	function updateHighlight(newval = highlight) {
 		if (selected) {
 			opacityVals({data: filter ?
-				points.array.map(d => d[newval] === selected ? 1 : 0.1) :
+				points.array.map(d => d[`${newval}_${geo}`] === selected ? 1 : 0.1) :
 				Array.from({length: points.array.length}, () => 0.7)});
 			highlighted = getHighlighted(data, selected, newval);
 			highlight = newval;
+			fitBounds([metadata[selected], ...highlighted.map(cd => metadata[cd])]);
 		}
 	}
-	$: console.log(highlight);
 </script>
 
 <main class="container">
 	<div class="info">
-		{#each hovered ? [hovered] : selected ? [selected] : [] as code}
 		<div class="grid">
+			<button on:click={() => updateGeo("lad")} class:btn-active={geo === "lad"}>Local authorities</button>
+			<button on:click={() => updateGeo("msoa")} class:btn-active={geo === "msoa"}>Neighbourhoods</button>
+			{#each hovered ? [hovered] : selected ? [selected] : [] as code}
 			<div class="big-text" style:grid-column="span 2">
 				{metadata[code].areanm}
 				{#if code === selected}<button on:click={unSelect} class="btn-link">Deselect</button>{/if}
@@ -176,10 +239,8 @@
 			</button>
 			<button on:click={() => updateHighlight("to")} class:btn-active={highlight === "to"}>
 				Workday population
-				<div class="big-text">
-					{data[code].workday.toLocaleString()}
-					<span class="small-text">{(data[code].workday - data[code].resident).toLocaleString("en-GB", {signDisplay: "exceptZero"})}</span>
-				</div>
+				<div class="big-text">{data[code].workday.toLocaleString()}</div>
+				<div class="small-text">{(data[code].workday - data[code].resident).toLocaleString("en-GB", {signDisplay: "exceptZero"})}</div>
 			</button>
 			<div style:grid-column="span 2">
 				{#if highlight === "from"}
@@ -187,7 +248,7 @@
 					{category: "Works from home", value: data[code].home, color: 0},
 					{category: `Works within ${metadata[code].areanm}`, value: data[code].within, color: 0},
 					...[1, 2, 3, 4, 5].map(i => ({
-						category: metadata[data[code][`to${i}cd`]].areanm,
+						category: `Works in ${metadata[data[code][`to${i}cd`]].areanm}`,
 						value: data[code][`to${i}`],
 						color: 1
 					})),
@@ -198,7 +259,7 @@
 					{category: "Works from home", value: data[code].home, color: 0},
 					{category: `Lives within ${metadata[code].areanm}`, value: data[code].within, color: 0},
 					...[1, 2, 3, 4, 5].map(i => ({
-						category: metadata[data[code][`from${i}cd`]].areanm,
+						category: `Lives in ${metadata[data[code][`from${i}cd`]].areanm}`,
 						value: data[code][`from${i}`],
 						color: 1
 					})),
@@ -212,10 +273,8 @@
 					Highlight points for this area on map
 				</label>
 			</div>
-		</div>
-		{/each}
-		{#if !selected && !hovered}
-		<div class="grid">
+			{/each}
+			{#if !selected && !hovered}
 			<div class="big-text" style:grid-column="span 2">
 				2011 Census travel to work data
 			</div>
@@ -227,8 +286,8 @@
 				</ul>
 				<p>Note: The data in this tool is from 2011, not the latest 2021 census.</p>
 			</div>
+			{/if}
 		</div>
-		{/if}
 	</div>
 
 	<div class="map">
@@ -244,16 +303,15 @@
 			minzoom={6}
 			controls
 			on:load={init}>
+			{#if mapSources[1].props.data}
+			{#each mapSources as s}
 			<MapSource
-				id="msoa"
-				type="vector"
-				layer="msoa"
+				id="{s.key}"
+				type="{s.type}"
 				promoteId="areacd"
-				maxzoom={12}
-				minzoom={6}
-				url={"https://cdn.ons.gov.uk/maptiles/administrative/msoa/v2/boundaries/{z}/{x}/{y}.pbf"}>
+				{...s.props}>
 				<MapLayer
-					id="msoa-fill"
+					id="{s.key}-fill"
 					type="fill"
 					paint={{
 						"fill-color": "rgba(0,0,0,0)"
@@ -261,17 +319,20 @@
 					order="water"
 					hover bind:hovered
 					select {selected} on:select={doSelect}
-					highlight {highlighted}/>
+					highlight {highlighted}
+					visible={geo === s.key}
+					/>
 				<MapLayer
-					id="msoa-line"
+					id="{s.key}-line"
 					type="line"
 					paint={{
 						"line-color": '#555',
 						"line-width": 0.5
 					}}
-					order="place_other"/>
+					order="place_other"
+					visible={geo === s.key}/>
 				<MapLayer
-					id="msoa-highlighted"
+					id="{s.key}-highlighted"
 					type="line"
 					paint={{
 						"line-color": ['case',
@@ -280,9 +341,10 @@
 						],
 						"line-width": 1
 					}}
-					order="place_other"/>
+					order="place_other"
+					visible={geo === s.key}/>
 				<MapLayer
-					id="msoa-selected"
+					id="{s.key}-selected"
 					type="line"
 					paint={{
 						"line-color": ['case',
@@ -295,8 +357,11 @@
 							1
 						]
 					}}
-					order="place_other"/>
+					order="place_other"
+					visible={geo === s.key}/>
 			</MapSource>
+			{/each}
+			{/if}
 		</Map>
 	</div>
 </main>
@@ -340,6 +405,8 @@
 	}
 	button {
 		text-align: left;
+		display: inline-flex;
+		flex-direction: column;
 	}
 	.btn-active {
 		border-color: white;
