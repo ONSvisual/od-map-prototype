@@ -18,7 +18,7 @@ export async function load({ fetch }) {
   const metadata_array = [
     ...csvParse(await metadata_lad_raw),
     ...csvParse(await metadata_msoa_raw)
-  ];
+  ].sort((a, b) => a.areanm.localeCompare(b.areanm));
   const metadata_indexed = {};
   metadata_array.forEach(d => metadata_indexed[d.areacd] = d);
   metadata = metadata_indexed;
@@ -46,5 +46,5 @@ export async function load({ fetch }) {
   points.from = points.array.map(d => plot([d.x1, d.y1]));
   points.to = points.array.map(d => plot([d.x2, d.y2]));
 
-  return { areadata, metadata, sources, points };
+  return { arealist: metadata_array, areadata, metadata, sources, points };
 }

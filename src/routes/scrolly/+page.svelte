@@ -1,7 +1,7 @@
 <script>
   import "@onsvisual/svelte-components/css/main.css";
   import reglLib from "regl";
-  import reglTween from "regl-tween";
+  import reglTween from "$lib/vendor/regl-tween";
   import { bounds } from "$lib/config";
   import { scaleLinear, getJourneys } from "$lib/utils";
   import { Theme, Header, Hero, Highlight, Section, Grid, Select, Em, Scroller, ScrollerSection, Footer } from "@onsvisual/svelte-components";
@@ -11,7 +11,7 @@
 	// import BarChart from "$lib/charts/BarChart.svelte";
 
   export let data;
-  const { areadata, metadata, sources, points } = data;
+  const { arealist, areadata, metadata, sources, points } = data;
   const count = points.array.length;
   const scale = scaleLinear([5, 14], [0.5, 4]);
   const colors = {
@@ -134,7 +134,8 @@
 	}
 
 	async function doSelect(e) {
-		const code = typeof e === "string" ? e : e?.detail?.id;
+    console.log(e)
+		const code = typeof e === "string" ? e : e?.detail?.id ? e?.detail?.id : e?.detail?.areacd;
 		if (code) {
       journeys = await getJourneys(code);
 			selected = code;
@@ -197,15 +198,18 @@
         unSelect();
         map.fitBounds(bounds.london);
       },
-      "westminster1": () => {
+      "select": () => {
         updatePos("from", 1);
-        doSelect("E09000033");
+        unSelect();
+        map.fitBounds(bounds.ew);
+      },
+      "westminster1": () => {
+        updatePos("from");
         map.fitBounds(bounds.london);
       },
       "westminster2": () => {
         color = colors.work;
         updatePos("to");
-        doSelect("E09000033");
         map.fitBounds(bounds.london);
       },
     },
@@ -374,6 +378,12 @@
           By animating these points, we can see the approximate journey to work of each of these people, including those who work from home.
         </p>
       </ScrollerSection>
+      <ScrollerSection id="select">
+        <label for="select-workplace">
+          Find your area to explore its workplace flow data.
+        </label>
+        <Select id="select-workplace" mode="search" options={arealist} idKey="areacd" labelKey="areanm" on:change={doSelect}/>
+      </ScrollerSection>
       <ScrollerSection id="westminster1">
         <p>
           We can start to understand these flows better if we highlight the place of residence of all the people who work in <Em>Westminster</Em>.
@@ -490,5 +500,8 @@
   }
   :global(svelte-scroller-outer) {
     pointer-events: none;
+  }
+  :global(.ons-scroller-section) {
+    pointer-events: all;
   }
 </style>

@@ -37,8 +37,8 @@ export async function getJourneys(code) {
   const path = `${base}/data/chunks/wu01ew_${code.slice(0, 8)}.csv`;
   const rows = csvParse(await (await fetch(path)).text(), autoType);
   const data = {};
-  data.to = rows.filter(d => d.to === code).map(d => ({code: d.from, value: d.value})).sort((a, b) => b.value - a.value).slice(0, 100);
-  data.from = rows.filter(d => d.from === code).map(d => ({code: d.to, value: d.value})).sort((a, b) => b.value - a.value).slice(0, 100);
+  data.to = rows.filter(d => d.to === code).map(d => ({code: d.from, value: d.value})).sort((a, b) => b.value - a.value).slice(0, 50);
+  data.from = rows.filter(d => d.from === code).map(d => ({code: d.to, value: d.value})).sort((a, b) => b.value - a.value).slice(0, 50);
   console.log(data);
   return data;
 }
