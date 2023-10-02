@@ -16,9 +16,11 @@ export async function load({ fetch }) {
   const metadata_lad_raw = await (await fetch(`${base}/data/lad11_metadata.csv`)).text();
   const metadata_msoa_raw = await (await fetch(`${base}/data/msoa11_metadata.csv`)).text();
   const metadata_array = [
-    ...csvParse(await metadata_lad_raw),
-    ...csvParse(await metadata_msoa_raw)
-  ].sort((a, b) => a.areanm.localeCompare(b.areanm));
+    ...csvParse(await metadata_lad_raw, autoType),
+    ...csvParse(await metadata_msoa_raw, autoType)
+  ]
+    .map(d => ({...d, x: (d.xmin + d.xmax) / 2, y: (d.ymin + d.ymax) / 2}))
+    .sort((a, b) => a.areanm.localeCompare(b.areanm));
   const metadata_indexed = {};
   metadata_array.forEach(d => metadata_indexed[d.areacd] = d);
   metadata = metadata_indexed;

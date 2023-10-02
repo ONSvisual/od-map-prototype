@@ -19,13 +19,15 @@
     migration: [246, 96, 104],
   };
 
-  let map, selected, hovered, highlighted, zoom, journeys;
+  let map, selected, hovered, highlighted, zoom;
   let regl, tween, scene, positionBuffer, opacityVals, uMatrix;
+  let journeys;
 	let geo = "lad";
   let pos = "from";
 	let highlight = "to";
 	let filter = true;
   let color = colors.work;
+  let pixelRatio = 1;
 
 	function fitBounds(features) {
 		const bounds = [
@@ -38,6 +40,7 @@
 	}
 
   async function init() {
+    // Define function to create REGL WebGL dots layer
     const createScene = gl => {
       regl = reglLib(gl);
       tween = reglTween(regl);
@@ -103,6 +106,11 @@
       return { render }
     }
 
+    // Limit Maplibre pixel ratio to 1.5 to improve performance on retina devices
+    pixelRatio = window.devicePixelRatio > 1.5 ? 1.5 : window.devicePixelRatio;
+    map.setPixelRatio(pixelRatio);
+
+    // Add REGL custom dots layer to Maplibre map
     map.addLayer({
 			id: 'custom_layer',
 			type: 'custom',
@@ -117,7 +125,7 @@
 				zoom = map.getZoom();
 				scene.render({
           uMatrix,
-          pointSize: scale(zoom) * window.devicePixelRatio,
+          pointSize: scale(zoom) * pixelRatio,
           pointColor: color.map(c => c / 255),
         });
 			}
@@ -134,12 +142,13 @@
 	}
 
 	async function doSelect(e) {
-    console.log(e)
 		const code = typeof e === "string" ? e : e?.detail?.id ? e?.detail?.id : e?.detail?.areacd;
 		if (code) {
+      geo = ["E02", "W02"].includes(code.slice(0, 3)) ? "msoa" : "lad";
       journeys = await getJourneys(code);
 			selected = code;
 			updateHighlight();
+      fitBounds([metadata[selected], ...highlighted.map(cd => metadata[cd])]);
 		}
 	}
 
@@ -147,6 +156,7 @@
 		selected = null;
     journeys = null;
 		highlighted = [];
+    geo = "lad";
 		opacityVals({data: Array.from({length: points.array.length}, () => 0.7)});
 		if (e) map.fitBounds(bounds.ew);
 	}
@@ -176,7 +186,6 @@
 				Array.from({length: points.array.length}, () => 0.7)});
 			highlighted = getHighlighted(areadata, selected, newval);
 			highlight = newval;
-			fitBounds([metadata[selected], ...highlighted.map(cd => metadata[cd])]);
 		}
 	}
 
@@ -203,14 +212,14 @@
         unSelect();
         map.fitBounds(bounds.ew);
       },
-      "westminster1": () => {
+      "place1": () => {
         updatePos("from");
-        map.fitBounds(bounds.london);
+        fitBounds([metadata[selected], ...highlighted.map(cd => metadata[cd])])
       },
-      "westminster2": () => {
+      "place2": () => {
         color = colors.work;
         updatePos("to");
-        map.fitBounds(bounds.london);
+        fitBounds([metadata[selected], ...highlighted.map(cd => metadata[cd])])
       },
     },
     "migration-scroller": {
@@ -241,7 +250,6 @@
     },
   };
   const runAction = (e) => {
-    console.log(e);
     const action = actions?.[e.detail.id]?.[e.detail.sectionId];
     if (action) action();
   };
@@ -267,10 +275,15 @@
 				<MapLayer
 					id="{s.key}-fill"
 					type="fill"
+          data={journeys ? journeys[highlight] : []}
+          idKey="code"
 					paint={{
-						"fill-color": "rgba(0,0,0,0)"
+						"fill-color": ['case',
+              ['!=', ['feature-state', 'color'], null], ['feature-state', 'color'],
+              'rgba(255, 255, 255, 0)'
+            ],
 					}}
-					order="water"
+					order="place_suburb"
 					hover bind:hovered
 					select {selected} on:select={doSelect}
 					highlight {highlighted}
@@ -365,7 +378,7 @@
     <div slot="foreground">
       <ScrollerSection id="start">
         <p>
-          Each <Em color="rgb({colors.work.join(",")})">blue point</Em> on this map represents 100 working people aged 16 and over, positioned based on their place of residence.
+          Each <strong>blue point</strong> <span class="bullet" style:background="rgb({colors.work.join(",")})"/> on this map represents 100 working people aged 16 and over, positioned based on their place of residence.
         </p>
       </ScrollerSection>
       <ScrollerSection id="london">
@@ -384,14 +397,22 @@
         </label>
         <Select id="select-workplace" mode="search" options={arealist} idKey="areacd" labelKey="areanm" on:change={doSelect}/>
       </ScrollerSection>
-      <ScrollerSection id="westminster1">
+      <ScrollerSection id="place1">
         <p>
-          We can start to understand these flows better if we highlight the place of residence of all the people who work in <Em>Westminster</Em>.
+          We can start to understand these flows better if we highlight the place of residence of all the people who work in
+          {#if selected}
+          <Em>{metadata[selected].areanm}</Em>.
+          {:else}
+          <Em>one area</Em>.
+          {/if}
         </p>
       </ScrollerSection>
-      <ScrollerSection id="westminster2">
+      <ScrollerSection id="place2">
         <p>
-          And then animate their journeys to work. Note that many of the {areadata["E09000033"].workday.toLocaleString()} people who work in Westminster travel from outside of Greater London.
+          And then animate their journeys to work.
+          {#if selected}
+          There are {areadata[selected].workday.toLocaleString()} people who work in {metadata[selected].areanm}.
+          {/if}
         </p>
       </ScrollerSection>
     </div>
@@ -485,6 +506,13 @@
     display: inline-block;
     margin-right: 12px;
     white-space: nowrap;
+  }
+  .bullet {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: grey;
   }
   :global(.ons-page__container, .ons-page__container--narrow) {
     overflow: visible !important;

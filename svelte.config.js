@@ -12,7 +12,7 @@ const config = {
 			assets: 'build'
 		}),
 		prerender: {
-			entries: ['/', '/scrolly'],
+			entries: ['/', '/scrolly', '/v2'],
 			handleHttpError: 'warn',
 			handleMissingId: 'warn'
 		},

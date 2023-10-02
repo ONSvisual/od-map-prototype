@@ -56,3 +56,13 @@ export const mapSources = [
     props: {}
   }
 ];
+
+export const colors = {
+  choro: [
+    "rgba(255,255,255,0.0)",
+    "rgba(255,255,255,0.1)",
+    "rgba(255,255,255,0.2)",
+    "rgba(255,255,255,0.3)",
+    "rgba(255,255,255,0.4)"
+  ]
+};
