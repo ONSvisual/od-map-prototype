@@ -4,6 +4,7 @@
   import { base } from "$app/paths";
   import { bounds } from "../config";
   import { scaleLinear, getJourneys, makeOverlayGeom } from "../utils";
+  import maplibre from "maplibre-gl";
   import { Map, MapSource, MapLayer } from "@onsvisual/svelte-maps";
   import InfoPalette from "./InfoPalette.svelte";
   import BreaksPalette from "./BreaksPalette.svelte";
@@ -31,7 +32,7 @@
   export let showInfo = true;
   export let showBreaks = true;
 
-  let sources, points, count, zoom;
+  let sources, points, count, zoom, tooltip;
   let regl, tween, scene, positionBuffer, opacityVals, uMatrix;
 
   let overlayGeom = makeOverlayGeom();
@@ -131,6 +132,13 @@
         });
 			}
 		}, "place_suburb");
+
+    map.on("moveend", () => {if (!selected) setGeoType()});
+
+    tooltip = new maplibre.Popup({
+      closeButton: false,
+      closeOnClick: false
+    });
   }
 
   let _highlight = highlight;
@@ -177,8 +185,8 @@
   $: updatePos(pos);
 
   function getMaxBounds(journeys) {
-    const from = journeys.from.slice(0, journeys.from.map(j => j.color).indexOf("rgba(255,255,255,0.0)"));
-    const to = journeys.to.slice(0, journeys.from.map(j => j.color).indexOf("rgba(255,255,255,0.0)"));
+    const from = journeys.from.slice(0, journeys.from.map(j => j.color).indexOf("rgba(255,255,255,0.1)"));
+    const to = journeys.to.slice(0, journeys.from.map(j => j.color).indexOf("rgba(255,255,255,0.1)"));
     const codes = Array.from(new Set([...from.map(d => d.code), ...to.map(d => d.code)]));
     const bounds = codes.map(code => {
       const d = data.metadata[code];
@@ -196,29 +204,60 @@
     console.debug("select", e, code);
 
     if (code) {
-      geo = ["E02", "W02"].includes(code.slice(0, 3)) ? "msoa" : "lad";
       journeys = await getJourneys(code);
       selected = code;
+      geo = ["E02", "W02"].includes(code.slice(0, 3)) ? "msoa" : "lad";
       updateHighlight();
       const bbox = getMaxBounds(journeys);
-      map.fitBounds(bbox);
+      map.fitBounds(bbox, {padding: 20});
     }
+  }
+
+  async function unSelect() {
+    selected = null;
+    journeys = null;
+    updateHighlight();
+    setGeoType();
   }
 
   function doHover(e) {
     const code = typeof e === "string" ? e : e?.detail?.id || e?.detail?.areacd;
-    console.log(selected, code);
     overlayGeom = selected && highlight ?
       makeOverlayGeom(data.metadata?.[selected], data.metadata?.[code]) :
       makeOverlayGeom();
-    console.log(overlayGeom);
+    console.log(overlayGeom.points);
+    if (overlayGeom.midpoint) {
+      const sel = data.metadata[selected].areanm;
+      const hov = data.metadata[hovered].areanm;
+      let content;
+      if (hov === sel) {
+        const d = data.areadata[selected];
+        content = `<b>Within ${sel}</b><br/>${d.within.toLocaleString()} internal trips<br/>${d.home.toLocaleString()} work from home`
+      } else {
+        const count = highlight === "to" ? journeys.toLookup[hovered] || 0 : journeys.fromLookup[hovered] || 0;
+        content = `<b>${highlight === "to" ? `${sel} &rarr; ${hov}` : `${hov} &rarr; ${sel}`}</b><br/>${count.toLocaleString()} trips`;
+      }
+      tooltip.setLngLat(overlayGeom.midpoint).setHTML(content).addTo(map);
+    } else {
+      tooltip.remove();
+    }
+  }
+
+  function setGeoType() {
+    const features = map?.queryRenderedFeatures({ layers: ["quads"] });
+    if (Array.isArray(features)) {
+      const count = features.length;
+      const canvas = map.getCanvas();
+      const pixelArea = canvas.clientWidth * canvas.clientHeight;
+      geo = (count * 1e6) / pixelArea > 40 ? "lad" : "msoa";
+    }
   }
 </script>
 
 <div class="map">
   <slot/>
   {#if showInfo}
-  <InfoPalette {data} {selected} {hovered} {highlight} on:change={doSelect}/>
+  <InfoPalette {data} {selected} {hovered} {highlight} on:change={doSelect} on:clear={unSelect}/>
   {/if}
   {#if showBreaks && highlight}
   <BreaksPalette {data} {journeys} {selected} {highlight} bind:hovered on:hover={doHover}/>
@@ -230,6 +269,15 @@
     {interactive}
     controls={interactive}
     on:load={init}>
+    <MapSource
+      id="quads"
+      type="geojson"
+      data={data.quads}>
+      <MapLayer
+        id="quads"
+        type="circle"
+        paint={{"circle-radius": 1, "circle-color": "rgba(0,0,0,1)"}}/>
+    </MapSource>
     {#if sources[1].props.data}
     {#each sources as s}
     <MapSource
@@ -245,8 +293,9 @@
         paint={{
           "fill-color": ['case',
             ['!=', ['feature-state', 'color'], null], ['feature-state', 'color'],
-            'rgba(255, 255, 255, 0)'
+            'rgba(0, 0, 0, 0)'
           ],
+          "fill-opacity": 0.7
         }}
         order="place_suburb"
         hover bind:hovered
@@ -258,12 +307,9 @@
       <MapLayer
         id="{s.key}-line"
         type="line"
-        paint={{
-          "line-color": '#555',
-          "line-width": 0.5
-        }}
+        paint={geo === s.key ? {"line-color": '#555', "line-width": 0.5} : {"line-color": '#777', "line-width": 0.75}}
         order="place_other"
-        visible={geo === s.key}/>
+        visible={s.key === "lad" || geo === s.key}/>
       <MapLayer
         id="{s.key}-selected"
         type="line"
@@ -319,5 +365,13 @@
     right: 0;
     top: 0;
     bottom: 0;
+  }
+  .map :global(.maplibregl-popup-content) {
+    background: black;
+    padding: 4px 8px;
+    pointer-events: none;
+  }
+  .map :global(.maplibregl-popup-tip) {
+    border-top-color: black;
   }
 </style>

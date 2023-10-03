@@ -1,6 +1,9 @@
 <script>
+  import { createEventDispatcher } from "svelte";
   import { Select, Dropdown } from "@onsvisual/svelte-components";
   import AlluvialChart from "../charts/AlluvialChart.svelte";
+
+  const dispatch = createEventDispatcher();
 
   export let data;
   export let selected;
@@ -22,7 +25,7 @@
     autoClear
     on:change/>
     {#if area}
-      <h2>{area.areanm}</h2>
+      <h2>{area.areanm} <button on:click={() => dispatch("clear")} class="btn-link">Deselect</button></h2>
       <div class="info-grid">
         {#if !highlight || highlight === "to"}
         <div>Living here <strong class="text-big">{area.d.resident.toLocaleString()}</strong></div>
@@ -91,4 +94,12 @@
   .text-muted {
     color: #bbb;
   }
+	.btn-link {
+		margin: 0;
+		padding: 0;
+		background: none;
+		border: none;
+		color: #27A0CC;
+		font-size: 14px;
+	}
 </style>

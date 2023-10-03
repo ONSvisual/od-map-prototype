@@ -50,21 +50,30 @@ export async function getJourneys(code) {
   const fromData = rows.filter(d => d.to === code).filter(d => !["OD", "N9", "S9"].includes(d.from.slice(0, 2))).map(d => ({code: d.from, value: d.value}));
   const fromVals = fromData.filter(d => d.code !== code).map(d => d.value).sort((a, b) => a - b);
   const data = {};
-  data.toBreaks = [...ckmeans(toVals, 5), toVals[toVals.length - 1]];
-  data.fromBreaks = [...ckmeans(fromVals, 5), fromVals[fromVals.length - 1]];
+  data.toBreaks = [...ckmeans(toVals, 5).slice(0, 4), toVals[toVals.length - 1]];
+  data.fromBreaks = [...ckmeans(fromVals, 5).slice(0, 4), fromVals[fromVals.length - 1]];
   data.to = toData.sort((a, b) => b.value - a.value).map(d => ({...d, color: getColor(d.value, data.toBreaks, colors.choro)}));
   data.from = fromData.sort((a, b) => b.value - a.value).map(d => ({...d, color: getColor(d.value, data.fromBreaks, colors.choro)}));
-  console.log(data);
+  data.toLookup = {};
+  data.fromLookup = {};
+  data.to.forEach(d => data.toLookup[d.code] = d.value);
+  data.from.forEach(d => data.fromLookup[d.code] = d.value);
   return data;
 }
 
 const makeGeomCollection = (geometries = []) => ({type: "GeometryCollection", geometries});
 const makePoint = (coordinates) => ({type: "Point", coordinates});
 const makeLine = (coordinates) => ({type: "LineString", coordinates});
+const avg = (val1, val2) => (val1 + val2) / 2;
 
 export const makeOverlayGeom = (a = null, b = null) => {
-  if (!a || !b || (a.x === b.x && a.y === b.y)) return {points: makeGeomCollection(), lines: makeGeomCollection()};
+  if (!a || !b || (a.x === b.x && a.y === b.y)) return {
+    points: makeGeomCollection(),
+    lines: makeGeomCollection(),
+    midpoint: a ? [a.x, a.y] : null
+  };
   const points = makeGeomCollection([makePoint([a.x, a.y]), makePoint([b.x, b.y])]);
   const lines = makeGeomCollection([makeLine([[a.x, a.y], [b.x, b.y]])]);
-  return {points, lines};
+  const midpoint = [avg(a.x, b.x), avg(a.y, b.y)];
+  return {points, lines, midpoint};
 };

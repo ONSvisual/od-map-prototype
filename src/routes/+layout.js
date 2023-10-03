@@ -48,5 +48,16 @@ export async function load({ fetch }) {
   points.from = points.array.map(d => plot([d.x1, d.y1]));
   points.to = points.array.map(d => plot([d.x2, d.y2]));
 
-  return { arealist: metadata_array, areadata, metadata, sources, points };
+  const quads_raw = await fetch(`${base}/data/quads.csv`);
+  const quads = {
+    type: "GeometryCollection",
+    geometries: csvParse(await quads_raw.text(), (d) => {
+      return {
+        type: "Point",
+        coordinates: [+d.lng, +d.lat]
+      };
+    })
+  };
+
+  return { arealist: metadata_array, areadata, metadata, sources, points, quads };
 }

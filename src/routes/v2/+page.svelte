@@ -21,14 +21,14 @@
         <input type="checkbox" bind:checked={interactive}/>
         Interactive
       </label>
-      <label>
+      <!-- <label>
         Geo type<br/>
         <select bind:value={geo}>
           {#each geos as g}
           <option value={g}>{g}</option>
           {/each}
         </select>
-      </label>
+      </label> -->
       <label>
         Point location<br/>
         <select bind:value={pos}>
