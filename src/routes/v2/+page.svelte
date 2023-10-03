@@ -7,12 +7,11 @@
 
   const geos = ["lad", "msoa"];
   const poss = ["from", "to"];
-  const highlights = ["from", "to"];
 
   let interactive = true;
 	let geo = geos[0];
   let pos = poss[0];
-  let highlight = highlights[0];
+  let highlight = null;
 </script>
 
 <Theme theme="dark">
@@ -41,9 +40,9 @@
       <label>
         Highlight<br/>
         <select bind:value={highlight}>
-          {#each highlights as h}
-          <option value={h}>{h === "from" ? "works here" : "lives here"}</option>
-          {/each}
+          <option value="from">working here</option>
+          <option value="to">living here</option>
+          <option value={null}>none</option>
         </select>
       </label>
     </div>

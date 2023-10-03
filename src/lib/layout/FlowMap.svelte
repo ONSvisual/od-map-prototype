@@ -17,12 +17,12 @@
   export let data;
   export let map = null;
   export let selected;
-  export let hovered
+  export let hovered;
   export let highlighted;
   export let journeys;
 	export let geo = "lad";
   export let pos = "from";
-	export let highlight = "from";
+	export let highlight = null;
 	export let filter = true;
   export let color = colors.work;
   export let pixelRatio = 1;
@@ -137,7 +137,7 @@
   function updateHighlight(highlight = _highlight) {
 		if (selected) {
 			opacityVals({data: filter ?
-				points.array.map(d => d[`${highlight === "to" ? "from" : "to"}_${geo}`] === selected ? 1 : 0.01) :
+				points.array.map(d => !highlight || d[`${highlight === "to" ? "from" : "to"}_${geo}`] === selected ? 1 : 0.01) :
 				Array.from({length: points.array.length}, () => 0.7)});
 			// highlighted = getHighlighted(areadata, selected, newval);
 			_highlight = highlight;
@@ -208,7 +208,9 @@
   function doHover(e) {
     const code = typeof e === "string" ? e : e?.detail?.id || e?.detail?.areacd;
     console.log(selected, code);
-    overlayGeom = makeOverlayGeom(data.metadata?.[selected], data.metadata?.[code]);
+    overlayGeom = selected && highlight ?
+      makeOverlayGeom(data.metadata?.[selected], data.metadata?.[code]) :
+      makeOverlayGeom();
     console.log(overlayGeom);
   }
 </script>
@@ -216,9 +218,9 @@
 <div class="map">
   <slot/>
   {#if showInfo}
-  <InfoPalette {data} {selected} {highlight} on:change={doSelect}/>
+  <InfoPalette {data} {selected} {hovered} {highlight} on:change={doSelect}/>
   {/if}
-  {#if showBreaks}
+  {#if showBreaks && highlight}
   <BreaksPalette {data} {journeys} {selected} {highlight} bind:hovered on:hover={doHover}/>
   {/if}
   <Map bind:map
@@ -238,7 +240,7 @@
       <MapLayer
         id="{s.key}-fill"
         type="fill"
-        data={journeys ? journeys[highlight] : []}
+        data={journeys && highlight ? journeys[highlight] : []}
         idKey="code"
         paint={{
           "fill-color": ['case',
@@ -259,18 +261,6 @@
         paint={{
           "line-color": '#555',
           "line-width": 0.5
-        }}
-        order="place_other"
-        visible={geo === s.key}/>
-      <MapLayer
-        id="{s.key}-highlighted"
-        type="line"
-        paint={{
-          "line-color": ['case',
-            ['==', ['feature-state', 'highlighted'], true], '#aaa',
-            'rgba(0,0,0,0)'
-          ],
-          "line-width": 1
         }}
         order="place_other"
         visible={geo === s.key}/>
